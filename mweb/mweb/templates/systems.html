@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% load url from future %}
+
+{% block header %}
+      <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+
+          <a class="brand" href="/">Monitr</a>
+
+          <ul class="nav">
+            <li class="active"><a href="{% url 'systems' %}">Systems</a></li>
+            <li><a href="{% url 'hosts' %}">Hosts</a></li>
+            <li><a href="{% url 'resources' %}">Resources</a></li>
+          </ul>
+             
+        </div>
+      </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<h1>Systems</h1>
+
+{% for sys in systems %}
+  <div class="row">
+    <div style="border-bottom: 1px solid grey" class="span12">
+      <h2>{{ sys.system_id }}</h2>
+    </div>
+  </div>
+  <div class="row">
+    <div style="padding-top: 10px"" class="span12">
+      <p>{{ sys.worker_count }} workers on {{ sys.host_count }} host</p> 
+      <h4>Workers</h4>
+      <table class="table table-condensed">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Host</th>
+            <th>PID</th>
+            <th style="text-align:center">Status</th>
+            <th></th>
+          <tr>
+        </thead>
+        <tbody>
+          {% for wkr in sys.workers %}
+              <tr
+              {% if wkr.health == 0 %}
+                class=""
+              {% elif wkr.health == 1 %} 
+                class="warning" 
+              {% else %}
+                class="error"
+              {% endif %}
+              >
+            <td><a href="#">{{ wkr.worker_id }}</a></td>
+            <td>{{ wkr.hostname }}</td>
+            <td>{{ wkr.pid }}</td>
+            <td style="text-align:center">
+              {% if wkr.health == 0 %}
+                <span class="label label-success">Healthy</span>
+              {% elif wkr.health == 1 %} 
+                <span class="label label-warning">Warning</span>
+              {% else %}
+                <span class="label label-important">Missing</span>
+              {% endif %}  
+            </td>
+            <td>
+              {% if wkr.health == 0 %}
+                
+              {% elif wkr.health == 1 %} 
+                Went missing
+              {% if wkr.missing_count == 1 %} once {% else %} for {% endif %}
+              {{ wkr.missing_count}} 
+              {% if wkr.missing_count == 1 %}  {% else %} times {% endif %}
+              in the last 8 hours
+              {% else %}
+               Missing for <abbr title="since {{ wkr.missing_time_abbr }}">{{ wkr.missing_time }}</abbr>
+              {% endif %}
+            </td>
+
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endfor %}
+  
+{% endblock %}

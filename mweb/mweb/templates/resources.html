@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% load url from future %}
+
+{% block header %}
+      <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+
+          <a class="brand" href="/">Monitr</a>
+
+          <ul class="nav">
+            <li><a href="{% url 'systems' %}">Systems</a></li>
+            <li><a href="{% url 'hosts' %}">Hosts</a></li>
+            <li class="active"><a href="{% url 'resources' %}">Resources</a></li>
+          </ul>
+             
+        </div>
+      </div>
+    </div>
+{% endblock %}
+
+
+{% block content %}
+<h1>Resources</h1>
+<p>Lorem ipsum dipsum</p>
+{% endblock %}
