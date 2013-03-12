@@ -5,23 +5,20 @@ from django.shortcuts import render
 from django.http import Http404
 
 import jsonrpclib
-
 import json
-
 import string
-
 import time
-
 import datetime
 
 jsonrpclib.config.version = 1.0
 
-VERSION = '1'
+DATA_SERVER_ENDPOINT  = 'http://localhost:7080'
+DATA_PROTOCOL_VERSION = '1'
 
 class Event(object):
 
-    ALIVE   = 0
-    MISSING = 1
+    ALIVE   = "ALIVE"
+    MISSING = "MISSING"
 
     def __init__(self, attrs):
         self.timestamp = attrs['timestamp']
@@ -29,13 +26,18 @@ class Event(object):
 
 class Worker(object):
 
-    HEALTHY  = 0
-    IMPAIRED = 1
-    MISSING  = 2
+    HEALTHY  = "HEALTHY"
+    IMPAIRED = "IMPAIRED"
+    MISSING  = "MISSING"
 
+    TIME_FMT = "%Y-%m-%d %H:%M:%S %Z"
+
+    #
+    # Construct a worker with a list of events and identifying attributes
     def __init__(self, events, attrs):
         self.events    = events
         self.worker_id = attrs['worker_id']
+        # URI-safe form of worker_id
         self.urlname   = string.replace(attrs['worker_id'], '-', '_')
         self.hostname  = attrs['hostname']
         self.pid       = attrs['pid']
@@ -43,41 +45,62 @@ class Worker(object):
         self.analyze_health()
 
     def analyze_health(self):
-
-        # set health to one of HEALTHY, IMPAIRED, MISSING
+        # Inspect the most recent event to see whether Worker is missing or not
         cur = self.events[-1]
         if cur.state == Event.MISSING:
             self.health = Worker.MISSING
-            period = time.time() - cur.timestamp
-            m, s = divmod(period,60)
-            h, m = divmod(m,60)
-            if not (h and m):
-                self.missing_time = "%02ds" % s
-            elif not h:
-                self.missing_time = "%02dm%02ds" % (m, s)
-            else:
-                self.missing_time = "%dh%02dm%02ds" % (h, m, s)
-            self.missing_time_abbr =  datetime.datetime.utcfromtimestamp(cur.timestamp).strftime("%Y-%m-%d %H:%M:%S %Z")
-
+            self.missing_time_str     = datetime.datetime.utcfromtimestamp(cur.timestamp).strftime(Worker.TIME_FMT)
+            self.missing_duration_str = self.format_missing_duration(time.time() - cur.timestamp)
         else:
-            self.health = Worker.HEALTHY
-            self.missing_count = 0
+            count = 0
             for ev in self.events:
                 if ev.state == Event.MISSING:
-                    self.missing_count = self.missing_count + 1
-                    if self.health != Worker.IMPAIRED:
-                        self.health = Worker.IMPAIRED
+                    count = count + 1
+            if count > 0:
+                self.health        = Worker.IMPAIRED
+                self.missing_count = count
+            else:
+                self.health        = Worker.HEALTHY
+                self.missing_count = 0
 
+    def format_missing_duration(self, interval):
+        # extract hour, minute, second components from the given interval, and format appropriately
+        hh, mm = divmod(interval, 3600)
+        mm, ss = divmod(mm, 60)
+        if not hh and not mm:
+            interval_str = "%02ds" % ss
+        elif not hh:
+            interval_str = "%02dm%02ds" % (mm, ss)
+        else:
+            interval_str = "%dh%02dm%02ds" % (hh, mm, ss)
+        return interval_str
 
-
+# Represents a physical host
 class Host(object):
+
+    # Ivars:
+    #
+    #   hostname: the UNIX hostname for this host
+    #   workers:  A list of Worker objects running on this host
+    #
 
     def __init__(self, hostname, workers):
         self.hostname = hostname
-        self.workers = workers
+        self.workers  = workers
 
 class System(object):
 
+    # Ivars:
+    #
+    #   workers: list of workers operating in this system
+    #   hosts:   list of hosts on which workers are running
+    #
+
+    # Parse the JSON tree and convert into a tree of System, Host, Worker, event objects
+    #
+    # Returns: A list of System objects, each containing a list of Workers and
+    # a list of Hosts. In turn, each Host object also contains a list of Workers.
+    #
     @classmethod
     def parse(cls, data):
         systems = []
@@ -112,26 +135,57 @@ class System(object):
     def host_count(self):
         return len(self.hosts)
 
+class DataModel(object):
 
+    def __init__(self):
+        self._data_client = jsonrpclib.Server(DATA_SERVER_ENDPOINT)
+
+    def get_all_system_state(self):
+        data = self._data_client.get_state(DATA_PROTOCOL_VERSION)
+        return System.parse(data)
+
+    def dump_json(data):
+        return json.dumps(data, sort_keys=True, indent=4)
+
+#
+# Homepage view
+#
 def home(request):
-    server = jsonrpclib.Server('http://localhost:7080')
-    data = server.get_state(VERSION)
-    return render(request, 'index.html', { 'data' : json.dumps(data, sort_keys=True, indent=4) })
+    return render(request, 'index.html', {})
 
+#
+# View: /systems/
+#
+# Makes a call to the data server to retrieve systems state
+# and renders the appropriate template
+#
 def systems(request):
-    server = jsonrpclib.Server('http://localhost:7080')
-    data = server.get_state(VERSION)
-    systems = System.parse(data)
-    return render(request, 'systems.html', { 'systems' : systems, 'data' : 4 })
+    model = DataModel()
+    systems = model.get_all_system_state()
+    params = { 'systems' : systems }
 
+    return render(request, 'systems.html', params)
+
+#
+# View: /hosts/
+#
 def hosts(request):
-    return render(request, 'hosts.html', { 'data' : 'foo' })
+    return render(request, 'hosts.html', {})
 
+#
+# View: /resources/
+#
 def resources(request):
-    return render(request, 'resources.html', { 'data' : 'foo' })
+    return render(request, 'resources.html', {})
 
+#
+# View: /system/
+#
 def system(request):
-    return render(request, 'hosts.html', { 'data' : 'foo' })
+    return render(request, 'hosts.html', {})
 
+#
+# View: /system/{system_id}/{worker_id}/
+#
 def worker(request, system_id, worker_id):
-    return render(request, 'hosts.html', { 'data' : 'foo' })
+    return render(request, 'hosts.html', {})

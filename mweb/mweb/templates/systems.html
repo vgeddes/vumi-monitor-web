@@ -30,7 +30,7 @@
     </div>
   </div>
   <div class="row">
-    <div style="padding-top: 10px"" class="span12">
+    <div style="padding-top: 10px" class="span12">
       <p>{{ sys.worker_count }} workers on {{ sys.host_count }} host</p> 
       <h4>Workers</h4>
       <table class="table table-condensed">
@@ -46,40 +46,39 @@
         <tbody>
           {% for wkr in sys.workers %}
               <tr
-              {% if wkr.health == 0 %}
-                class=""
-              {% elif wkr.health == 1 %} 
-                class="warning" 
-              {% else %}
-                class="error"
-              {% endif %}
-              >
+                 {% if wkr.health == 'HEALTHY' %}
+                 class=""
+                 {% elif wkr.health == 'IMPAIRED' %} 
+                 class="warning" 
+                 {% else %}
+                 class="error"
+                 {% endif %}
+                 >
             <td><a href="#">{{ wkr.worker_id }}</a></td>
             <td>{{ wkr.hostname }}</td>
             <td>{{ wkr.pid }}</td>
             <td style="text-align:center">
-              {% if wkr.health == 0 %}
+              {% if wkr.health == 'HEALTHY' %}
                 <span class="label label-success">Healthy</span>
-              {% elif wkr.health == 1 %} 
+              {% elif wkr.health == 'IMPAIRED' %} 
                 <span class="label label-warning">Warning</span>
               {% else %}
                 <span class="label label-important">Missing</span>
               {% endif %}  
             </td>
             <td>
-              {% if wkr.health == 0 %}
-                
-              {% elif wkr.health == 1 %} 
-                Went missing
-              {% if wkr.missing_count == 1 %} once {% else %} for {% endif %}
-              {{ wkr.missing_count}} 
-              {% if wkr.missing_count == 1 %}  {% else %} times {% endif %}
-              in the last 8 hours
+              {% if wkr.health == 'HEALTHY' %}
+                <!-- no status message  -->
+              {% elif wkr.health == 'IMPAIRED' %} 
+                {% if wkr.missing_count == 1 %}
+                  Went missing once in the last 8 hours 
+                {% else %} 
+                  Went missing {{ wkr.missing_count}} times in the last 8 hours
+                {% endif %}
               {% else %}
-               Missing for <abbr title="since {{ wkr.missing_time_abbr }}">{{ wkr.missing_time }}</abbr>
+               Missing for <abbr title="since {{ wkr.missing_time_str }}">{{ wkr.missing_duration_str }}</abbr>
               {% endif %}
             </td>
-
           </tr>
           {% endfor %}
         </tbody>
@@ -87,5 +86,4 @@
     </div>
   </div>
 {% endfor %}
-  
 {% endblock %}
